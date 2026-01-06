@@ -1,0 +1,97 @@
+# Backend-specific .dockerignore for Pluto Node.js API
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables (use Docker secrets instead)
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# Logs (should be handled by container logging)
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Testing files
+test
+tests
+__tests__
+*.test.js
+*.spec.js
+coverage
+*.lcov
+.nyc_output
+
+# Cache directories
+.npm
+.yarn
+.cache
+.eslintcache
+*.tsbuildinfo
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Git and version control
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+docs
+
+# Development tools
+.vscode
+.idea
+.nyc_output
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files (don't copy into container)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Uploads and temp files (should be in volumes or external storage)
+uploads/*
+!uploads/.gitkeep
+temp/*
+*.tmp
+*.swp
+*.bak
+*~
+
+# Build artifacts
+build
+dist
+lib
