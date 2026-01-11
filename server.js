@@ -77,6 +77,22 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    success: true,
+    message: 'Pluto Backend API is running',
+    version: process.env.npm_package_version || '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      videos: '/api/videos',
+      users: '/api/users',
+      comments: '/api/comments'
+    }
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -108,19 +124,19 @@ app.use(errorHandler);
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM signal received: closing HTTP server');
+  console.log('SIGTERM signal received: closing HTTP server');
   server.close(() => {
-    console.log('✅ HTTP server closed');
+    console.log('HTTP server closed');
     mongoose.connection.close(false, () => {
-      console.log('✅ MongoDB connection closed');
+      console.log('MongoDB connection closed');
       process.exit(0);
     });
   });
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 module.exports = app;
