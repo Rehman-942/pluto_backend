@@ -22,10 +22,9 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    curl
-
-# Create app user for security
-RUN addgroup -g 1001 -S nodejs && adduser -S pluto-backend -u 1001
+    curl \
+    libc6-compat \
+    vips-dev
 
 # Set working directory
 WORKDIR /app
@@ -33,8 +32,11 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --only=production --silent && npm cache clean --force
+# Install dependencies as root (needed for native compilation)
+RUN npm install --production --verbose && npm cache clean --force
+
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs && adduser -S pluto-backend -u 1001
 
 # Copy application code with proper ownership
 COPY --chown=pluto-backend:nodejs . .

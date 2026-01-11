@@ -16,7 +16,6 @@ const commentRoutes = require('./routes/comments');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
-const { connectRedis } = require('./config/redis');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,9 +27,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pluto', {
 })
 .then(() => console.log('✅ MongoDB Connected'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
-
-// Connect to Redis
-connectRedis();
 
 // Security middleware
 app.use(helmet({

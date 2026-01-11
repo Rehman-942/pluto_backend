@@ -3,7 +3,6 @@ const Joi = require('joi');
 const Comment = require('../models/Comment');
 const Video = require('../models/Video');
 const { protect, optionalAuth } = require('../middleware/auth');
-const { redisClient } = require('../config/redis');
 
 const router = express.Router();
 
@@ -26,17 +25,6 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
     const { videoId } = req.params;
     const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'asc' } = req.query;
 
-    // Try to get from cache first
-    const cacheKey = `comments:video:${videoId}:page:${page}:limit:${limit}:_${sortBy}_${sortOrder}`;
-    let cachedComments = await redisClient.getComments(cacheKey);
-    
-    if (cachedComments) {
-      return res.json({
-        success: true,
-        data: cachedComments,
-        cached: true
-      });
-    }
 
     // Verify video exists
     const video = await Video.findById(videoId);
@@ -80,9 +68,6 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
       }
     };
 
-    // Cache for 10 minutes
-    await redisClient.setComments(cacheKey, result, 600);
-
     res.json({
       success: true,
       data: result
@@ -104,17 +89,6 @@ router.get('/:id/thread', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const { limit = 50 } = req.query;
 
-    // Try to get from cache first
-    const cacheKey = `thread_${id}_${limit}`;
-    let cachedThread = await redisClient.get('comment_threads', cacheKey);
-    
-    if (cachedThread) {
-      return res.json({
-        success: true,
-        data: cachedThread,
-        cached: true
-      });
-    }
 
     const options = {
       limit: Math.min(parseInt(limit), 100)
@@ -136,10 +110,7 @@ router.get('/:id/thread', optionalAuth, async (req, res) => {
       });
     }
 
-    const result = { comments };
-
-    // Cache for 5 minutes
-    await redisClient.set('comment_threads', cacheKey, result, 300);
+    const result = { comments, threadId: id };
 
     res.json({
       success: true,
@@ -221,12 +192,6 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    // Invalidate comment caches
-    await Promise.all([
-      redisClient.del('comments', `${videoId}_*`),
-      redisClient.del('comment_threads', `*${parentId || comment._id}*`),
-      redisClient.invalidateVideo(videoId)
-    ]);
 
     res.status(201).json({
       success: true,
@@ -293,11 +258,6 @@ router.put('/:id', protect, async (req, res) => {
     await comment.save();
     await comment.populate('userId', 'username firstName lastName avatar');
 
-    // Invalidate caches
-    await Promise.all([
-      redisClient.del('comments', `${comment.videoId}_*`),
-      redisClient.del('comment_threads', `*${req.params.id}*`)
-    ]);
 
     res.json({
       success: true,
@@ -358,12 +318,6 @@ router.delete('/:id', protect, async (req, res) => {
       });
     }
 
-    // Invalidate caches
-    await Promise.all([
-      redisClient.del('comments', `${videoId}_*`),
-      redisClient.del('comment_threads', `*${req.params.id}*`),
-      redisClient.invalidateVideo(videoId.toString())
-    ]);
 
     res.json({
       success: true,
@@ -400,11 +354,6 @@ router.post('/:id/like', protect, async (req, res) => {
       await comment.addLike(req.user._id);
     }
 
-    // Invalidate comment caches
-    await Promise.all([
-      redisClient.del('comments', `${comment.videoId}_*`),
-      redisClient.del('comment_threads', `*${req.params.id}*`)
-    ]);
 
     res.json({
       success: true,
@@ -460,11 +409,6 @@ router.post('/:id/report', protect, async (req, res) => {
 
       await comment.save();
 
-      // Invalidate caches
-      await Promise.all([
-        redisClient.del('comments', `${comment.videoId}_*`),
-        redisClient.del('comment_threads', `*${req.params.id}*`)
-      ]);
     }
 
     res.json({

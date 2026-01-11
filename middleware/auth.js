@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { redisClient } = require('../config/redis');
 
 // JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -43,21 +42,14 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // Check cache first
-    let user = await redisClient.getUser(decoded.userId);
+    // Get user from database
+    const user = await User.findById(decoded.userId).select('-password');
     
     if (!user) {
-      // If not in cache, get from database
-      user = await User.findById(decoded.userId).select('-password');
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-      
-      // Cache user data
-      await redisClient.setUser(decoded.userId, user, 3600); // Cache for 1 hour
+      return res.status(401).json({
+        success: false,
+        error: 'User not found'
+      });
     }
 
     // Check if user is active
@@ -105,14 +97,7 @@ const optionalAuth = async (req, res, next) => {
       const decoded = jwt.verify(token, JWT_SECRET);
       
       if (decoded.type !== 'refresh') {
-        let user = await redisClient.getUser(decoded.userId);
-        
-        if (!user) {
-          user = await User.findById(decoded.userId).select('-password');
-          if (user && user.isActive) {
-            await redisClient.setUser(decoded.userId, user, 3600);
-          }
-        }
+        const user = await User.findById(decoded.userId).select('-password');
         
         if (user && user.isActive) {
           req.user = user;
@@ -189,25 +174,45 @@ const checkOwnership = (resourceModel, resourceIdParam = 'id', ownerField = 'use
   };
 };
 
-// Rate limiting using Redis
+// Simple rate limiting (memory-based, for single instance)
 const rateLimitByUser = (maxRequests = 100, windowMs = 15 * 60 * 1000) => {
+  const requestCounts = new Map();
+  
   return async (req, res, next) => {
     try {
-      const identifier = req.user ? req.user._id : req.ip;
-      const { count, ttl } = await redisClient.incrementRateLimit(identifier, windowMs);
-
+      const identifier = req.user ? req.user._id.toString() : req.ip;
+      const now = Date.now();
+      
+      if (!requestCounts.has(identifier)) {
+        requestCounts.set(identifier, { count: 1, resetTime: now + windowMs });
+      } else {
+        const record = requestCounts.get(identifier);
+        
+        if (now > record.resetTime) {
+          // Reset the counter
+          record.count = 1;
+          record.resetTime = now + windowMs;
+        } else {
+          record.count++;
+        }
+      }
+      
+      const record = requestCounts.get(identifier);
+      const remaining = Math.max(0, maxRequests - record.count);
+      
       // Set rate limit headers
       res.set({
         'X-RateLimit-Limit': maxRequests,
-        'X-RateLimit-Remaining': Math.max(0, maxRequests - count),
-        'X-RateLimit-Reset': new Date(Date.now() + ttl * 1000).toISOString()
+        'X-RateLimit-Remaining': remaining,
+        'X-RateLimit-Reset': new Date(record.resetTime).toISOString()
       });
 
-      if (count > maxRequests) {
+      if (record.count > maxRequests) {
+        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
         return res.status(429).json({
           success: false,
           error: 'Rate limit exceeded',
-          retryAfter: ttl
+          retryAfter
         });
       }
 
@@ -253,9 +258,6 @@ const refreshToken = async (req, res) => {
     // Generate new tokens
     const tokens = generateTokens(user._id);
 
-    // Update cache
-    await redisClient.setUser(user._id.toString(), user, 3600);
-
     res.json({
       success: true,
       data: {
@@ -289,9 +291,6 @@ const refreshToken = async (req, res) => {
 const logout = async (req, res) => {
   try {
     // In a production system, you might want to blacklist the token
-    // For now, we'll just clear the user cache
-    await redisClient.invalidateUser(req.user._id.toString());
-
     res.json({
       success: true,
       message: 'Logged out successfully'

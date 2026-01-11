@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const Joi = require('joi');
 const User = require('../models/User');
 const { generateTokens, refreshToken, logout, protect } = require('../middleware/auth');
-const { redisClient } = require('../config/redis');
 
 const router = express.Router();
 
@@ -63,9 +62,6 @@ router.post('/register', async (req, res) => {
 
     // Generate tokens
     const tokens = generateTokens(user._id);
-
-    // Cache user data
-    await redisClient.setUser(user._id.toString(), user, 3600);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -146,15 +142,14 @@ router.post('/login', async (req, res) => {
     // Generate tokens
     const tokens = generateTokens(user._id);
 
-    // Cache user data (without password)
-    const userForCache = user.toJSON();
-    delete userForCache.password;
-    await redisClient.setUser(user._id.toString(), userForCache, 3600);
+    // Remove password from response
+    const userResponse = user.toJSON();
+    delete userResponse.password;
 
     res.json({
       success: true,
       data: {
-        user: userForCache,
+        user: userResponse,
         tokens
       },
       message: 'Login successful'
@@ -241,9 +236,6 @@ router.put('/change-password', protect, async (req, res) => {
     user.password = newPassword;
     await user.save();
 
-    // Invalidate cache to force re-authentication
-    await redisClient.invalidateUser(user._id.toString());
-
     res.json({
       success: true,
       message: 'Password changed successfully'
@@ -309,35 +301,27 @@ router.get('/stats', protect, async (req, res) => {
       });
     }
 
-    // Check cache first
-    let stats = await redisClient.get('admin', 'auth_stats');
+    // Get stats from database
+    const totalUsers = await User.countDocuments();
+    const activeUsers = await User.countDocuments({ isActive: true });
+    const verifiedUsers = await User.countDocuments({ isVerified: true });
+    const creatorUsers = await User.countDocuments({ role: 'Creator' });
+    const consumerUsers = await User.countDocuments({ role: 'Consumer' });
     
-    if (!stats) {
-      // Get stats from database
-      const totalUsers = await User.countDocuments();
-      const activeUsers = await User.countDocuments({ isActive: true });
-      const verifiedUsers = await User.countDocuments({ isVerified: true });
-      const creatorUsers = await User.countDocuments({ role: 'Creator' });
-      const consumerUsers = await User.countDocuments({ role: 'Consumer' });
-      
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const recentLogins = await User.countDocuments({ 
-        lastLoginAt: { $gte: thirtyDaysAgo } 
-      });
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentLogins = await User.countDocuments({ 
+      lastLoginAt: { $gte: thirtyDaysAgo } 
+    });
 
-      stats = {
-        totalUsers,
-        activeUsers,
-        verifiedUsers,
-        creatorUsers,
-        consumerUsers,
-        recentLogins,
-        generatedAt: new Date().toISOString()
-      };
-
-      // Cache for 10 minutes
-      await redisClient.set('admin', 'auth_stats', stats, 600);
-    }
+    const stats = {
+      totalUsers,
+      activeUsers,
+      verifiedUsers,
+      creatorUsers,
+      consumerUsers,
+      recentLogins,
+      generatedAt: new Date().toISOString()
+    };
 
     res.json({
       success: true,

@@ -5,7 +5,6 @@ const azureStorage = require('../utils/azureStorage');
 const Joi = require('joi');
 const User = require('../models/User');
 const { protect, optionalAuth, checkOwnership } = require('../middleware/auth');
-const { redisClient } = require('../config/redis');
 
 const router = express.Router();
 
@@ -67,18 +66,6 @@ router.get('/', optionalAuth, async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Create cache key
-    const cacheKey = `users_${JSON.stringify({ page, limit, search, role, sortBy, sortOrder })}`;
-    
-    // Check cache first
-    let cachedData = await redisClient.get('users_list', cacheKey);
-    if (cachedData) {
-      return res.json({
-        success: true,
-        data: cachedData,
-        cached: true
-      });
-    }
 
     let query = { isActive: true };
     
@@ -124,8 +111,6 @@ router.get('/', optionalAuth, async (req, res) => {
       }
     };
 
-    // Cache for 5 minutes
-    await redisClient.set('users_list', cacheKey, result, 300);
 
     res.json({
       success: true,
@@ -147,23 +132,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check cache first
-    let user = await redisClient.getUser(id);
-    
+    const user = await User.findById(id)
+      .select('-password')
+      .lean();
+
     if (!user) {
-      user = await User.findById(id)
-        .select('-password')
-        .lean();
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-
-      // Cache for 1 hour
-      await redisClient.setUser(id, user, 3600);
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
     }
 
     // Check if profile is public or if user is viewing own profile
@@ -225,8 +202,6 @@ router.put('/:id', protect, checkOwnership(User, 'id', '_id'), async (req, res) 
       });
     }
 
-    // Update cache
-    await redisClient.setUser(req.params.id, user.toObject(), 3600);
 
     res.json({
       success: true,
@@ -291,8 +266,6 @@ router.post('/:id/avatar', protect, checkOwnership(User, 'id', '_id'), upload.si
       }
     }
 
-    // Update cache
-    await redisClient.setUser(req.params.id, user.toObject(), 3600);
 
     res.json({
       success: true,
@@ -340,8 +313,6 @@ router.delete('/:id/avatar', protect, checkOwnership(User, 'id', '_id'), async (
 
     await user.save();
 
-    // Update cache
-    await redisClient.setUser(req.params.id, user.toObject(), 3600);
 
     res.json({
       success: true,
@@ -363,41 +334,32 @@ router.get('/:id/stats', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check cache first
-    const cacheKey = `stats_${id}`;
-    let stats = await redisClient.get('user_stats', cacheKey);
-
-    if (!stats) {
-      const user = await User.findById(id).select('stats role isActive');
-      if (!user || !user.isActive) {
-        return res.status(404).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-
-      // Get additional stats from Photo collection
-      const Photo = require('../models/Photo');
-      const totalViews = await Photo.aggregate([
-        { $match: { creatorId: user._id } },
-        { $group: { _id: null, totalViews: { $sum: '$stats.viewsCount' } } }
-      ]);
-
-      const totalLikes = await Photo.aggregate([
-        { $match: { creatorId: user._id } },
-        { $group: { _id: null, totalLikes: { $sum: '$stats.likesCount' } } }
-      ]);
-
-      stats = {
-        ...user.stats,
-        totalViews: totalViews[0]?.totalViews || 0,
-        totalLikes: totalLikes[0]?.totalLikes || 0,
-        role: user.role
-      };
-
-      // Cache for 10 minutes
-      await redisClient.set('user_stats', cacheKey, stats, 600);
+    const user = await User.findById(id).select('stats role isActive');
+    if (!user || !user.isActive) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
     }
+
+    // Get additional stats from Photo collection
+    const Photo = require('../models/Photo');
+    const totalViews = await Photo.aggregate([
+      { $match: { creatorId: user._id } },
+      { $group: { _id: null, totalViews: { $sum: '$stats.viewsCount' } } }
+    ]);
+
+    const totalLikes = await Photo.aggregate([
+      { $match: { creatorId: user._id } },
+      { $group: { _id: null, totalLikes: { $sum: '$stats.likesCount' } } }
+    ]);
+
+    const stats = {
+      ...user.stats.toObject(),
+      totalViews: totalViews[0]?.totalViews || 0,
+      totalLikes: totalLikes[0]?.totalLikes || 0,
+      role: user.role
+    };
 
     res.json({
       success: true,
@@ -483,17 +445,6 @@ router.get('/search/:query', optionalAuth, async (req, res) => {
       });
     }
 
-    // Check cache first
-    const cacheKey = `${query}_${page}_${limit}`;
-    let cachedResults = await redisClient.getSearchResults(`users_${cacheKey}`);
-    
-    if (cachedResults) {
-      return res.json({
-        success: true,
-        data: cachedResults,
-        cached: true
-      });
-    }
 
     const options = {
       page: parseInt(page),
@@ -513,9 +464,6 @@ router.get('/search/:query', optionalAuth, async (req, res) => {
       },
       searchQuery: query
     };
-
-    // Cache for 15 minutes
-    await redisClient.setSearchResults(`users_${cacheKey}`, result, 900);
 
     res.json({
       success: true,
@@ -553,9 +501,6 @@ router.delete('/:id', protect, checkOwnership(User, 'id', '_id'), async (req, re
         error: 'User not found'
       });
     }
-
-    // Clear cache
-    await redisClient.invalidateUser(req.params.id);
 
     res.json({
       success: true,

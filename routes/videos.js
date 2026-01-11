@@ -3,7 +3,6 @@ const multer = require('multer');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const Video = require('../models/Video');
 const User = require('../models/User');
-const { redisClient } = require('../config/redis');
 const videoProcessor = require('../utils/videoProcessor');
 const Joi = require('joi');
 const path = require('path');
@@ -67,13 +66,6 @@ router.get('/', async (req, res) => {
       maxDuration
     } = req.query;
 
-    const cacheKey = `videos:list:${JSON.stringify(req.query)}`;
-    
-    // Try to get from cache first
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
 
     const options = {
       page: parseInt(page),
@@ -102,9 +94,6 @@ router.get('/', async (req, res) => {
         }
       }
     };
-
-    // Cache for 5 minutes
-    await redisClient.setex(cacheKey, 300, response);
     
     res.json(response);
   } catch (error) {
@@ -121,13 +110,6 @@ router.get('/trending', async (req, res) => {
   try {
     const { page = 1, limit = 20, timeframe = '7d' } = req.query;
     
-    const cacheKey = `videos:trending:${page}:${limit}:${timeframe}`;
-    
-    // Try to get from cache first
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
 
     const options = {
       page: parseInt(page),
@@ -148,9 +130,6 @@ router.get('/trending', async (req, res) => {
         }
       }
     };
-
-    // Cache for 10 minutes
-    await redisClient.setex(cacheKey, 600, response);
     
     res.json(response);
   } catch (error) {
@@ -168,13 +147,6 @@ router.get('/user/:userId', async (req, res) => {
     const { userId } = req.params;
     const { page = 1, limit = 20, visibility = 'public' } = req.query;
     
-    const cacheKey = `videos:user:${userId}:${page}:${limit}:${visibility}`;
-    
-    // Try to get from cache first
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
 
     let visibilityArray = ['public'];
     
@@ -190,7 +162,7 @@ router.get('/user/:userId', async (req, res) => {
       visibility: visibilityArray
     };
 
-    const videos = await Video.searchVideos('', options);
+    const videos = await Video.getUserVideos(userId, options);
     
     const response = {
       success: true,
@@ -203,9 +175,6 @@ router.get('/user/:userId', async (req, res) => {
         }
       }
     };
-
-    // Cache for 5 minutes
-    await redisClient.setex(cacheKey, 300, response);
     
     res.json(response);
   } catch (error) {
@@ -222,26 +191,6 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const cacheKey = `video:${id}`;
-    
-    // Try to get from cache first
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      // Record view if not from cache or if enough time has passed
-      if (req.user) {
-        try {
-          const video = await Video.findById(id);
-          if (video) {
-            await video.addView(req.user._id, req.ip, req.get('User-Agent'));
-            // Invalidate cache to reflect new view count
-            await redisClient.del(cacheKey);
-          }
-        } catch (viewError) {
-          console.error('Error recording view:', viewError);
-        }
-      }
-      return res.json(cached);
-    }
 
     const video = await Video.findById(id)
       .populate('creatorId', 'username firstName lastName avatar')
@@ -283,9 +232,6 @@ router.get('/:id', async (req, res) => {
       success: true,
       data: { video }
     };
-
-    // Cache for 5 minutes
-    await redisClient.setex(cacheKey, 300, response);
     
     res.json(response);
   } catch (error) {
@@ -358,9 +304,6 @@ router.post('/',
       // Populate creator info for response
       await video.populate('creatorId', 'username firstName lastName avatar');
 
-      // Invalidate related caches
-      await redisClient.invalidatePattern('videos:*');
-      await redisClient.invalidatePattern(`videos:user:${req.user._id}:*`);
 
       res.status(201).json({
         success: true,
@@ -423,10 +366,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Populate creator info
     await video.populate('creatorId', 'username firstName lastName avatar');
-
-    // Invalidate caches
-    await redisClient.invalidatePattern(`video:${id}`);
-    await redisClient.invalidatePattern('videos:*');
 
     res.json({
       success: true,
@@ -502,15 +441,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     // Delete video document
     await Video.findByIdAndDelete(id);
 
-    // Update user's video count
+    // Update user's videos count
     await User.findByIdAndUpdate(video.creatorId, {
       $inc: { 'stats.videosCount': -1 }
     });
-
-    // Invalidate caches
-    await redisClient.invalidatePattern(`video:${id}`);
-    await redisClient.invalidatePattern('videos:*');
-    await redisClient.invalidatePattern(`videos:user:${video.creatorId}:*`);
 
     res.json({
       success: true,
@@ -545,9 +479,6 @@ router.post('/:id/like', authenticateToken, async (req, res) => {
     } else {
       await video.addLike(req.user._id);
     }
-
-    // Invalidate caches
-    await redisClient.invalidatePattern(`video:${id}`);
 
     res.json({
       success: true,
