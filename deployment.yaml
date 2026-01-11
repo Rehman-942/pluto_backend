@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pluto-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pluto-backend
+  template:
+    metadata:
+      labels:
+        app: pluto-backend
+    spec:
+      containers:
+      - name: pluto-backend
+        image: rehman942/pluto-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "5000"
+        - name: MONGODB_ROOT_USERNAME
+          value: "pluto"
+        - name: MONGODB_ROOT_PASSWORD
+          value: "JqX64w3w5SuNghE"
+        - name: MONGODB_DATABASE
+          value: "pluto"
+        - name: MONGODB_URI
+          value: "mongodb+srv://pluto:JqX64w3w5SuNghE@pluto.global.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pluto-secrets
+              key: jwt-secret
+        - name: JWT_EXPIRE
+          value: "7d"
+        - name: JWT_REFRESH_EXPIRE
+          value: "30d"
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          value: "videos"
+        - name: AZURE_STORAGE_ACCOUNT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pluto-secrets
+              key: azure-storage-key
+        - name: AZURE_STORAGE_CONTAINER_NAME
+          value: "plutovideostorage"
+        - name: FRONTEND_URL
+          value: "http://localhost:3000"
+        - name: RATE_LIMIT_WINDOW_MS
+          value: "900000"
+        - name: RATE_LIMIT_MAX_REQUESTS
+          value: "100"
+        - name: MAX_FILE_SIZE
+          value: "500MB"
+        - name: ALLOWED_VIDEO_TYPES
+          value: "mp4,avi,mov,wmv,flv,webm,mkv"
+        - name: ALLOWED_IMAGE_TYPES
+          value: "jpg,jpeg,png,gif,webp"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pluto-backend-service
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5000
+  selector:
+    app: pluto-backend
