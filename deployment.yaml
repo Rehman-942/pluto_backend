@@ -41,14 +41,14 @@ spec:
         - name: JWT_REFRESH_EXPIRE
           value: "30d"
         - name: AZURE_STORAGE_ACCOUNT_NAME
-          value: "videos"
+          value: "plutovideostorage"
         - name: AZURE_STORAGE_ACCOUNT_KEY
           valueFrom:
             secretKeyRef:
               name: pluto-secrets
               key: azure-storage-key
         - name: AZURE_STORAGE_CONTAINER_NAME
-          value: "plutovideostorage"
+          value: "videos"
         - name: FRONTEND_URL
           value: "http://localhost:3000"
         - name: RATE_LIMIT_WINDOW_MS

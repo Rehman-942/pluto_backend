@@ -13,6 +13,8 @@ const authRoutes = require('./routes/auth');
 const videoRoutes = require('./routes/videos');
 const userRoutes = require('./routes/users');
 const commentRoutes = require('./routes/comments');
+const uploadRoutes = require('./routes/upload');
+const uploadProxyRoutes = require('./routes/upload-proxy');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -73,7 +75,7 @@ app.use(limiter);
 // Specific rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs for auth
+  max: 500, // limit each IP to 5 requests per windowMs for auth
   skipSuccessfulRequests: true,
 });
 
@@ -106,6 +108,8 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/upload-proxy', uploadProxyRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);

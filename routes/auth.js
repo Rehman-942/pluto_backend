@@ -48,6 +48,8 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    console.log('Creating user with data:', { username, email, firstName, lastName, role });
+
     // Create user
     const user = new User({
       username,
@@ -58,7 +60,9 @@ router.post('/register', async (req, res) => {
       role
     });
 
+    console.log('User created, saving...');
     await user.save();
+    console.log('User saved successfully with role:', user.role);
 
     // Generate tokens
     const tokens = generateTokens(user._id);
@@ -80,10 +84,27 @@ router.post('/register', async (req, res) => {
     
     if (error.code === 11000) {
       // Duplicate key error
-      const field = Object.keys(error.keyPattern)[0];
+      console.log('Duplicate key error details:', error);
+      let field = 'field';
+      let errorMessage = 'Already exists';
+      
+      if (error.keyPattern && Object.keys(error.keyPattern).length > 0) {
+        field = Object.keys(error.keyPattern)[0];
+        errorMessage = `${field} already exists`;
+      } else if (error.message) {
+        // Parse error message to determine field
+        if (error.message.includes('email')) {
+          errorMessage = 'Email already registered';
+        } else if (error.message.includes('username')) {
+          errorMessage = 'Username already taken';
+        } else {
+          errorMessage = 'User already exists';
+        }
+      }
+      
       return res.status(400).json({
         success: false,
-        error: `${field} already exists`
+        error: errorMessage
       });
     }
 
@@ -98,10 +119,16 @@ router.post('/register', async (req, res) => {
 // @desc    Login user
 // @access  Public
 router.post('/login', async (req, res) => {
+  console.log('=== LOGIN ATTEMPT ===');
+  console.log('Request body:', req.body);
+  console.log('IP:', req.ip);
+  console.log('User-Agent:', req.get('User-Agent'));
+  
   try {
     // Validate input
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
+      console.log('❌ Validation error:', error.details[0].message);
       return res.status(400).json({
         success: false,
         error: error.details[0].message
@@ -109,43 +136,56 @@ router.post('/login', async (req, res) => {
     }
 
     const { email, password } = value;
+    console.log('✅ Input validated for email:', email);
 
     // Find user and include password for comparison
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
+      console.log('❌ User not found for email:', email);
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'
       });
     }
+
+    console.log('✅ User found:', user.email, 'ID:', user._id);
 
     // Check password
     const isPasswordCorrect = await user.comparePassword(password);
     if (!isPasswordCorrect) {
+      console.log('❌ Invalid password for user:', user.email);
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'
       });
     }
 
+    console.log('✅ Password verified for user:', user.email);
+
     // Check if user is active
     if (!user.isActive) {
+      console.log('❌ User account deactivated:', user.email);
       return res.status(401).json({
         success: false,
         error: 'Account is deactivated'
       });
     }
 
+    console.log('✅ User account is active');
+
     // Update last login
     await user.updateLastLogin();
+    console.log('✅ Last login updated');
 
     // Generate tokens
     const tokens = generateTokens(user._id);
+    console.log('✅ Tokens generated');
 
     // Remove password from response
     const userResponse = user.toJSON();
     delete userResponse.password;
 
+    console.log('✅ Login successful for user:', user.email);
     res.json({
       success: true,
       data: {
@@ -155,7 +195,8 @@ router.post('/login', async (req, res) => {
       message: 'Login successful'
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Login failed'

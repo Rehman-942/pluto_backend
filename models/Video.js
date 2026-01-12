@@ -17,7 +17,7 @@ const videoSchema = new mongoose.Schema({
   creatorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Creator ID is required'],
+    required: false, // Allow anonymous uploads
     index: true
   },
 
@@ -129,8 +129,7 @@ const videoSchema = new mongoose.Schema({
     location: {
       type: {
         type: String,
-        enum: ['Point'],
-        default: 'Point'
+        enum: ['Point']
       },
       coordinates: {
         type: [Number], // [longitude, latitude]

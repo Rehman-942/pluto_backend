@@ -122,7 +122,18 @@ const authorize = (...roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Convert to lowercase for case-insensitive comparison
+    const userRole = req.user.role ? String(req.user.role).toLowerCase() : null;
+    const requiredRoles = roles.map(role => String(role).toLowerCase());
+
+    console.log('Authorization check:', {
+      userRole,
+      requiredRoles,
+      originalUserRole: req.user.role,
+      originalRequiredRoles: roles
+    });
+
+    if (!requiredRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,
         error: `Access denied. Required role: ${roles.join(' or ')}`
