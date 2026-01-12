@@ -342,22 +342,8 @@ router.get('/:id/stats', optionalAuth, async (req, res) => {
       });
     }
 
-    // Get additional stats from Photo collection
-    const Photo = require('../models/Photo');
-    const totalViews = await Photo.aggregate([
-      { $match: { creatorId: user._id } },
-      { $group: { _id: null, totalViews: { $sum: '$stats.viewsCount' } } }
-    ]);
-
-    const totalLikes = await Photo.aggregate([
-      { $match: { creatorId: user._id } },
-      { $group: { _id: null, totalLikes: { $sum: '$stats.likesCount' } } }
-    ]);
-
     const stats = {
       ...user.stats.toObject(),
-      totalViews: totalViews[0]?.totalViews || 0,
-      totalLikes: totalLikes[0]?.totalLikes || 0,
       role: user.role
     };
 
@@ -374,15 +360,6 @@ router.get('/:id/stats', optionalAuth, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/:id/photos
-// @desc    Get user's photos
-// @access  Public (redirects to photos route for consistency)
-router.get('/:id/photos', (req, res) => {
-  // Redirect to the photos route for better organization
-  const { page, limit, visibility } = req.query;
-  const queryParams = new URLSearchParams({ page, limit, visibility }).toString();
-  res.redirect(`/api/photos/user/${req.params.id}?${queryParams}`);
-});
 
 // @route   POST /api/users/:id/follow
 // @desc    Follow/unfollow user

@@ -102,16 +102,6 @@ class AzureStorageService {
     }
   }
 
-  /**
-   * Upload avatar image
-   * @param {Buffer} buffer - Image buffer
-   * @param {string} userId - User ID for unique naming
-   * @returns {Promise<Object>} Upload result
-   */
-  async uploadAvatar(buffer) {
-    const filename = `avatar_${uuidv4()}.jpg`;
-    return this.uploadBuffer(buffer, 'pluto/avatars', filename, 'image/jpeg');
-  }
 
   /**
    * Upload video file

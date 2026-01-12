@@ -177,12 +177,12 @@ commentSchema.pre('save', async function(next) {
   next();
 });
 
-// Static method to get comments for a photo
-commentSchema.statics.getPhotoComments = function(photoId, options = {}) {
+// Static method to get comments for a video
+commentSchema.statics.getVideoComments = function(videoId, options = {}) {
   const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 1 } = options;
   
   return this.find({
-    photoId,
+    videoId,
     parentId: null, // Only get top-level comments
     'moderation.status': 'approved'
   })
