@@ -45,14 +45,14 @@ app.use(helmet({
 }));
 
 // CORS configuration
-const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL
-    : ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+// const corsOptions = {
+//   origin: process.env.NODE_ENV === 'production' 
+//     ? process.env.FRONTEND_URL
+//     : ['http://localhost:3000', 'http://localhost:3001'],
+//   credentials: true,
+//   optionsSuccessStatus: 200
+// };
+// app.use(cors());
 
 // General middleware
 app.use(compression());
