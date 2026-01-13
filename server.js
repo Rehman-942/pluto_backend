@@ -52,7 +52,7 @@ app.use(helmet({
 //   credentials: true,
 //   optionsSuccessStatus: 200
 // };
-// app.use(cors());
+app.use(cors());
 
 // General middleware
 app.use(compression());
