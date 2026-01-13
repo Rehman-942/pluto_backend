@@ -25,15 +25,21 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
     const { videoId } = req.params;
     const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'asc' } = req.query;
 
+    console.log('=== COMMENT FETCH DEBUG ===');
+    console.log('Video ID:', videoId);
+    console.log('Query params:', { page, limit, sortBy, sortOrder });
 
     // Verify video exists
     const video = await Video.findById(videoId);
     if (!video) {
+      console.log('Video not found for ID:', videoId);
       return res.status(404).json({
         success: false,
         error: 'Video not found'
       });
     }
+
+    console.log('Video found:', video.title);
 
     const options = {
       page: parseInt(page),
@@ -43,6 +49,7 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
     };
 
     const comments = await Comment.getVideoComments(videoId, options);
+    console.log('Found comments:', comments.length);
     const totalComments = await Comment.countDocuments({ videoId, parentId: null, 'moderation.status': 'approved' });
 
     // Add user-specific data if authenticated

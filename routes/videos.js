@@ -284,14 +284,28 @@ router.get('/user/:userId', optionalAuth, async (req, res) => {
 });
 
 // GET /api/videos/:id - Get single video
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     
 
+    console.log('=== BACKEND VIDEO DEBUG ===');
+    console.log('Video ID being fetched:', id);
+    
     const video = await Video.findById(id)
       .populate('creatorId', 'username firstName lastName avatar')
       .lean();
+    
+    console.log('Video found:', !!video);
+    console.log('Raw creatorId field:', video?.creatorId);
+    console.log('CreatorId type:', typeof video?.creatorId);
+    
+    // Check if video exists but creatorId is missing
+    if (video && !video.creatorId) {
+      console.log('WARNING: Video exists but creatorId is null/undefined');
+      console.log('Video title:', video.title);
+      console.log('Video created at:', video.createdAt);
+    }
 
     if (!video) {
       return res.status(404).json({
