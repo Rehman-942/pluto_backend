@@ -266,15 +266,21 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    // Record view
+    // Record view and check if user liked the video
     if (req.user) {
       try {
         const videoDoc = await Video.findById(id);
         await videoDoc.addView(req.user._id, req.ip, req.get('User-Agent'));
         video.stats.viewsCount = videoDoc.stats.viewsCount;
+        
+        // Add isLikedByUser field for authenticated users
+        video.isLikedByUser = videoDoc.isLikedBy(req.user._id);
       } catch (viewError) {
         console.error('Error recording view:', viewError);
       }
+    } else {
+      // For non-authenticated users, set isLikedByUser to false
+      video.isLikedByUser = false;
     }
 
     const response = {
@@ -532,7 +538,7 @@ router.post('/:id/like', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       data: {
-        liked: !isLiked,
+        isLiked: !isLiked,
         likesCount: video.stats.likesCount
       },
       message: isLiked ? 'Video unliked' : 'Video liked'
