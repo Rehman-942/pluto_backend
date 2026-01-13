@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, optionalAuth } = require('../middleware/auth');
 const Video = require('../models/Video');
 const User = require('../models/User');
 const videoProcessor = require('../utils/videoProcessor');
@@ -223,7 +223,7 @@ router.get('/trending', async (req, res) => {
 });
 
 // GET /api/videos/user/:userId - Get videos by user
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', optionalAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { page = 1, limit = 20, visibility = 'public' } = req.query;
@@ -245,10 +245,26 @@ router.get('/user/:userId', async (req, res) => {
 
     const videos = await Video.getUserVideos(userId, options);
     
+    // Add isLikedByUser field for authenticated users
+    const currentUserId = req.user?.id;
+    const videosWithLikeStatus = videos.map(video => {
+      const videoObj = video.toObject ? video.toObject() : video;
+      
+      if (currentUserId && videoObj.likes) {
+        videoObj.isLikedByUser = videoObj.likes.some(like => 
+          like.userId && like.userId.toString() === currentUserId.toString()
+        );
+      } else {
+        videoObj.isLikedByUser = false;
+      }
+      
+      return videoObj;
+    });
+    
     const response = {
       success: true,
       data: {
-        videos,
+        videos: videosWithLikeStatus,
         pagination: {
           page: options.page,
           limit: options.limit,
