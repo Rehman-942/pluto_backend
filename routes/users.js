@@ -328,24 +328,78 @@ router.delete('/:id/avatar', protect, checkOwnership(User, 'id', '_id'), async (
 });
 
 // @route   GET /api/users/:id/stats
-// @desc    Get user statistics
+// @desc    Get user statistics (calculated from actual data)
 // @access  Public
 router.get('/:id/stats', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id).select('stats role isActive');
-    if (!user || !user.isActive) {
+    const user = await User.findById(id).select('-password').lean();
+    if (!user) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
+    // Get user's videos to calculate stats
+    const Video = require('../models/Video');
+    const Comment = require('../models/Comment');
+    
+    // Find videos for this user (including null creatorId videos if no videos found)
+    let videos = await Video.find({ creatorId: id }).lean();
+    
+    // If no videos found, check if there are videos with null creatorId (from old uploads)
+    if (videos.length === 0) {
+      const nullVideos = await Video.find({ creatorId: null }).lean();
+      if (nullVideos.length > 0) {
+        // Update null creatorId videos to current user
+        await Video.updateMany({ creatorId: null }, { $set: { creatorId: id } });
+        videos = await Video.find({ creatorId: id }).lean();
+      }
+    }
+
+    // Calculate stats from actual arrays
+    const totalViewsFromArray = videos.reduce((sum, video) => sum + (video.views?.length || 0), 0);
+    const totalLikesFromArray = videos.reduce((sum, video) => sum + (video.likes?.length || 0), 0);
+
+    // Get actual comment counts
+    const videoIds = videos.map(v => v._id);
+    const commentCounts = await Comment.aggregate([
+      { $match: { videoId: { $in: videoIds } } },
+      { $group: { _id: '$videoId', count: { $sum: 1 } } }
+    ]);
+    const actualTotalComments = commentCounts.reduce((sum, item) => sum + item.count, 0);
+
+    console.log('=== STATS CALCULATION FROM ARRAYS ===');
+    console.log('User ID:', id);
+    console.log('Videos found:', videos.length);
+    console.log('Total views (from views array):', totalViewsFromArray);
+    console.log('Total likes (from likes array):', totalLikesFromArray);
+    console.log('Total comments (from Comment collection):', actualTotalComments);
+
+    // Calculate aggregated stats
     const stats = {
-      ...user.stats.toObject(),
-      role: user.role
+      videosCount: videos.length,
+      totalViews: totalViewsFromArray,
+      totalLikes: totalLikesFromArray,
+      totalComments: actualTotalComments,
+      totalWatchTime: videos.reduce((sum, video) => sum + (video.stats?.watchTime?.total || 0), 0),
+      publicVideos: videos.filter(v => v.visibility === 'public').length,
+      privateVideos: videos.filter(v => v.visibility === 'private').length,
+      unlistedVideos: videos.filter(v => v.visibility === 'unlisted').length,
+      averageViews: videos.length > 0 ? Math.round(totalViewsFromArray / videos.length) : 0,
+      averageLikes: videos.length > 0 ? Math.round(totalLikesFromArray / videos.length) : 0,
+      followersCount: user.stats?.followersCount || 0,
+      followingCount: user.stats?.followingCount || 0
     };
+
+    // Disable caching
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
 
     res.json({
       success: true,
