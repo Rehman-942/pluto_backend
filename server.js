@@ -27,8 +27,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pluto', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('✅ MongoDB Connected'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+.then(() => console.log('MongoDB Connected'))
+.catch(err => console.error('MongoDB connection error:', err));
 
 // Security middleware
 app.use(helmet({
