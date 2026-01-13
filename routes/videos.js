@@ -105,6 +105,55 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/videos/liked - Get user's liked videos
+router.get('/liked', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    const options = {
+      page: parseInt(page),
+      limit: Math.min(parseInt(limit), 100)
+    };
+
+    // Find videos that the user has liked
+    const videos = await Video.find({
+      'likes.userId': req.user._id,
+      visibility: 'public'
+    })
+    .populate('creatorId', 'username firstName lastName avatar')
+    .sort({ 'likes.createdAt': -1 }) // Sort by when user liked them
+    .skip((options.page - 1) * options.limit)
+    .limit(options.limit)
+    .lean();
+
+    // Add isLikedByUser field for consistency
+    const videosWithLikeStatus = videos.map(video => ({
+      ...video,
+      isLikedByUser: true // Always true for liked videos
+    }));
+    
+    const response = {
+      success: true,
+      data: {
+        videos: videosWithLikeStatus,
+        pagination: {
+          page: options.page,
+          limit: options.limit,
+          hasMore: videos.length === options.limit
+        }
+      }
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching liked videos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch liked videos'
+    });
+  }
+});
+
 // GET /api/videos/trending - Get trending videos
 router.get('/trending', async (req, res) => {
   try {
