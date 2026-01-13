@@ -1,11 +1,13 @@
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const ffprobeStatic = require('ffprobe-static');
 const azureStorage = require('./azureStorage');
 const fs = require('fs');
 const path = require('path');
 
-// Set the path to the static FFmpeg binary
+// Set the path to the static FFmpeg and FFprobe binaries
 ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 class VideoProcessor {
   constructor() {
@@ -79,14 +81,14 @@ class VideoProcessor {
    */
   generateThumbnailAtTimestamp(videoPath, timestamp) {
     return new Promise((resolve, reject) => {
-      const outputFileName = `thumb_${Date.now()}_${Math.floor(timestamp)}.jpg`;
+      const outputFileName = `thumb_${Date.now()}_${Math.floor(timestamp)}.png`;
       const outputPath = path.join(this.tempDir, outputFileName);
 
       ffmpeg(videoPath)
         .seekInput(timestamp)
         .frames(1)
         .size('1280x720')
-        .format('jpg')
+        .format('png')
         .output(outputPath)
         .on('end', () => {
           resolve(outputPath);
@@ -191,7 +193,7 @@ class VideoProcessor {
    * @returns {Promise<string>} Path to poster thumbnail
    */
   async generatePoster(videoPath, timestamp = 5) {
-    const outputFileName = `poster_${Date.now()}.jpg`;
+    const outputFileName = `poster_${Date.now()}.png`;
     const outputPath = path.join(this.tempDir, outputFileName);
 
     return new Promise((resolve, reject) => {
@@ -199,8 +201,7 @@ class VideoProcessor {
         .seekInput(timestamp)
         .frames(1)
         .size('1920x1080')
-        .format('jpg')
-        .outputOptions(['-q:v 2']) // High quality
+        .format('png')
         .output(outputPath)
         .on('end', () => {
           resolve(outputPath);

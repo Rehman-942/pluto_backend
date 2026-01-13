@@ -380,8 +380,7 @@ videoSchema.statics.searchVideos = function(query, options = {}) {
   
   let searchQuery = {
     visibility: { $in: visibility },
-    'moderation.status': 'approved',
-    'metadata.processingStatus': 'completed'
+    'moderation.status': 'approved'
   };
   
   if (query && query.trim()) {
@@ -443,7 +442,6 @@ videoSchema.statics.getTrendingVideos = function(options = {}) {
   return this.find({
     visibility: 'public',
     'moderation.status': 'approved',
-    'metadata.processingStatus': 'completed',
     createdAt: { $gte: dateFilter }
   })
   .populate('creatorId', 'username firstName lastName avatar')
@@ -456,6 +454,30 @@ videoSchema.statics.getTrendingVideos = function(options = {}) {
   .limit(limit * 1)
   .skip((page - 1) * limit)
   .lean();
+};
+
+// Static method to get user videos
+videoSchema.statics.getUserVideos = function(userId, options = {}) {
+  const {
+    page = 1,
+    limit = 20,
+    visibility = ['public'],
+    sortBy = 'createdAt',
+    sortOrder = -1
+  } = options;
+  
+  const searchQuery = {
+    creatorId: userId,
+    visibility: { $in: visibility },
+    'moderation.status': 'approved'
+  };
+  
+  return this.find(searchQuery)
+    .populate('creatorId', 'username firstName lastName avatar')
+    .sort({ [sortBy]: sortOrder })
+    .limit(limit * 1)
+    .skip((page - 1) * limit)
+    .lean();
 };
 
 // Pre-save middleware to update stats

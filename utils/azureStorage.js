@@ -123,8 +123,8 @@ class AzureStorageService {
    * @returns {Promise<Object>} Upload result
    */
   async uploadThumbnail(filePath, videoPublicId, index, timestamp) {
-    const filename = `${videoPublicId}_thumb_${index}_${Math.floor(timestamp)}.jpg`;
-    return this.uploadFile(filePath, 'video_thumbnails', filename, 'image/jpeg');
+    const filename = `${videoPublicId}_thumb_${index}_${Math.floor(timestamp)}.png`;
+    return this.uploadFile(filePath, 'video_thumbnails', filename, 'image/png');
   }
 
   /**
