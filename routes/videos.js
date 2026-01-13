@@ -83,10 +83,26 @@ router.get('/', async (req, res) => {
 
     const videos = await Video.searchVideos(search, options);
     
+    // Add isLikedByUser field for authenticated users
+    const userId = req.user?.id;
+    const videosWithLikeStatus = videos.map(video => {
+      const videoObj = video.toObject ? video.toObject() : video;
+      
+      if (userId && videoObj.likes) {
+        videoObj.isLikedByUser = videoObj.likes.some(like => 
+          like.userId && like.userId.toString() === userId.toString()
+        );
+      } else {
+        videoObj.isLikedByUser = false;
+      }
+      
+      return videoObj;
+    });
+    
     const response = {
       success: true,
       data: {
-        videos,
+        videos: videosWithLikeStatus,
         pagination: {
           page: options.page,
           limit: options.limit,
@@ -168,10 +184,26 @@ router.get('/trending', async (req, res) => {
 
     const videos = await Video.getTrendingVideos(options);
     
+    // Add isLikedByUser field for authenticated users
+    const userId = req.user?.id;
+    const videosWithLikeStatus = videos.map(video => {
+      const videoObj = video.toObject ? video.toObject() : video;
+      
+      if (userId && videoObj.likes) {
+        videoObj.isLikedByUser = videoObj.likes.some(like => 
+          like.userId && like.userId.toString() === userId.toString()
+        );
+      } else {
+        videoObj.isLikedByUser = false;
+      }
+      
+      return videoObj;
+    });
+    
     const response = {
       success: true,
       data: {
-        videos,
+        videos: videosWithLikeStatus,
         pagination: {
           page: options.page,
           limit: options.limit,

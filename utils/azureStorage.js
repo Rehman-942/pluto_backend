@@ -128,6 +128,16 @@ class AzureStorageService {
   }
 
   /**
+   * Upload avatar image
+   * @param {Buffer} buffer - Avatar image buffer
+   * @returns {Promise<Object>} Upload result
+   */
+  async uploadAvatar(buffer) {
+    const filename = `${uuidv4()}.jpg`;
+    return this.uploadBuffer(buffer, 'avatars', filename, 'image/jpeg');
+  }
+
+  /**
    * Delete blob from Azure Storage
    * @param {string} blobName - Blob name to delete
    * @returns {Promise<void>}
